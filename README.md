@@ -9,3 +9,5 @@ InfyOm Laravel Generator
 [![License](https://poser.pugx.org/infyomlabs/laravel-generator/license)](https://packagist.org/packages/infyomlabs/laravel-generator)
 
 Documentation is located [here](http://labs.infyom.com/laravelgenerator)
+
+* We're forking this repo only to remove a package l5 repo, that we have forked separately in the main composer.
