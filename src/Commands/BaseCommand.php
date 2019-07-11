@@ -3,6 +3,7 @@
 namespace InfyOm\Generator\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Str;
 use InfyOm\Generator\Common\CommandData;
 use InfyOm\Generator\Generators\API\APIControllerGenerator;
 use InfyOm\Generator\Generators\API\APIRequestGenerator;
@@ -136,13 +137,14 @@ class BaseCommand extends Command
         }
 
         if ($runMigration) {
-            if ($this->commandData->config->forceMigrate) {
-                $this->call('migrate');
+            if ($this->commandData->getOption('forceMigrate')) {
+                $this->runMigration();
             } elseif (!$this->commandData->getOption('fromTable') and !$this->isSkip('migration')) {
-                if ($this->commandData->getOption('jsonFromGUI')) {
-                    $this->call('migrate');
-                } elseif ($this->confirm("\nDo you want to migrate database? [y|N]", false)) {
-                    $this->call('migrate');
+                $requestFromConsole = (php_sapi_name() == 'cli') ? true : false;
+                if ($this->commandData->getOption('jsonFromGUI') && $requestFromConsole) {
+                    $this->runMigration();
+                } elseif ($requestFromConsole && $this->confirm("\nDo you want to migrate database? [y|N]", false)) {
+                    $this->runMigration();
                 }
             }
         }
@@ -150,6 +152,15 @@ class BaseCommand extends Command
             $this->info('Generating autoload files');
             $this->composer->dumpOptimized();
         }
+    }
+
+    public function runMigration()
+    {
+        $migrationPath = config('infyom.laravel_generator.path.migration', 'database/migrations/');
+        $path = Str::after($migrationPath, base_path()); // get path after base_path
+        $this->call('migrate', ['--path' => $path, '--force' => true]);
+
+        return true;
     }
 
     public function isSkip($skip)
@@ -228,8 +239,10 @@ class BaseCommand extends Command
         return [
             ['fieldsFile', null, InputOption::VALUE_REQUIRED, 'Fields input as json file'],
             ['jsonFromGUI', null, InputOption::VALUE_REQUIRED, 'Direct Json string while using GUI interface'],
+            ['plural', null, InputOption::VALUE_REQUIRED, 'Plural Model name'],
             ['tableName', null, InputOption::VALUE_REQUIRED, 'Table Name'],
             ['fromTable', null, InputOption::VALUE_NONE, 'Generate from existing table'],
+            ['ignoreFields', null, InputOption::VALUE_REQUIRED, 'Ignore fields while generating from table'],
             ['save', null, InputOption::VALUE_NONE, 'Save model schema to file'],
             ['primary', null, InputOption::VALUE_REQUIRED, 'Custom primary key'],
             ['prefix', null, InputOption::VALUE_REQUIRED, 'Prefix for all files'],
@@ -238,6 +251,8 @@ class BaseCommand extends Command
             ['datatables', null, InputOption::VALUE_REQUIRED, 'Override datatables settings'],
             ['views', null, InputOption::VALUE_REQUIRED, 'Specify only the views you want generated: index,create,edit,show'],
             ['relations', null, InputOption::VALUE_NONE, 'Specify if you want to pass relationships for fields'],
+            ['softDelete', null, InputOption::VALUE_NONE, 'Soft Delete Option'],
+            ['forceMigrate', null, InputOption::VALUE_NONE, 'Specify if you want to run migration or not'],
         ];
     }
 
