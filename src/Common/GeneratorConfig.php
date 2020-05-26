@@ -30,12 +30,15 @@ class GeneratorConfig
     public $pathRepository;
     public $pathModel;
     public $pathDataTables;
+    public $pathFactory;
+    public $pathSeeder;
+    public $pathDatabaseSeeder;
+    public $pathViewProvider;
 
     public $pathApiController;
     public $pathApiRequest;
     public $pathApiRoutes;
     public $pathApiTests;
-    public $pathApiTestTraits;
 
     public $pathController;
     public $pathRequest;
@@ -57,12 +60,15 @@ class GeneratorConfig
     public $mHuman;
     public $mHumanPlural;
 
+    public $connection = '';
+
     /* Generator Options */
     public $options;
 
     /* Prefixes */
     public $prefixes;
 
+    /** @var CommandData */
     private $commandData;
 
     /* Command Options */
@@ -83,6 +89,11 @@ class GeneratorConfig
         'plural',
         'softDelete',
         'forceMigrate',
+        'factory',
+        'seeder',
+        'repositoryPattern',
+        'localized',
+        'connection',
     ];
 
     public $tableName;
@@ -145,7 +156,6 @@ class GeneratorConfig
         $this->nsBaseController = config('infyom.laravel_generator.namespace.controller', 'App\Http\Controllers');
         $this->nsController = config('infyom.laravel_generator.namespace.controller', 'App\Http\Controllers').$prefix;
 
-        $this->nsTestTraits = config('infyom.laravel_generator.namespace.test_trait', 'Tests\Traits');
         $this->nsApiTests = config('infyom.laravel_generator.namespace.api_test', 'Tests\APIs');
         $this->nsRepositoryTests = config('infyom.laravel_generator.namespace.repository_test', 'Tests\Repositories');
         $this->nsTests = config('infyom.laravel_generator.namespace.tests', 'Tests');
@@ -191,8 +201,6 @@ class GeneratorConfig
 
         $this->pathApiTests = config('infyom.laravel_generator.path.api_test', base_path('tests/APIs/'));
 
-        $this->pathApiTestTraits = config('infyom.laravel_generator.path.test_trait', base_path('tests/Traits/'));
-
         $this->pathController = config(
             'infyom.laravel_generator.path.controller',
             app_path('Http/Controllers/')
@@ -201,15 +209,23 @@ class GeneratorConfig
         $this->pathRequest = config('infyom.laravel_generator.path.request', app_path('Http/Requests/')).$prefix;
 
         $this->pathRoutes = config('infyom.laravel_generator.path.routes', base_path('routes/web.php'));
+        $this->pathFactory = config('infyom.laravel_generator.path.factory', database_path('factories/'));
 
         $this->pathViews = config(
             'infyom.laravel_generator.path.views',
-            base_path('resources/views/')
+            resource_path('views/')
         ).$viewPrefix.$this->mSnakePlural.'/';
 
+        $this->pathSeeder = config('infyom.laravel_generator.path.seeder', database_path('seeds/'));
+        $this->pathDatabaseSeeder = config('infyom.laravel_generator.path.database_seeder', database_path('seeds/DatabaseSeeder.php'));
+        $this->pathViewProvider = config(
+            'infyom.laravel_generator.path.view_provider',
+            app_path('Providers/ViewServiceProvider.php')
+        );
+
         $this->modelJsPath = config(
-                'infyom.laravel_generator.path.modelsJs',
-                base_path('resources/assets/js/models/')
+            'infyom.laravel_generator.path.modelsJs',
+            resource_path('assets/js/models/')
         );
     }
 
@@ -230,7 +246,6 @@ class GeneratorConfig
         $commandData->addDynamicVariable('$NAMESPACE_REQUEST_BASE$', $this->nsRequestBase);
 
         $commandData->addDynamicVariable('$NAMESPACE_API_TESTS$', $this->nsApiTests);
-        $commandData->addDynamicVariable('$NAMESPACE_TEST_TRAITS$', $this->nsTestTraits);
         $commandData->addDynamicVariable('$NAMESPACE_REPOSITORIES_TESTS$', $this->nsRepositoryTests);
         $commandData->addDynamicVariable('$NAMESPACE_TESTS$', $this->nsTests);
 
@@ -250,6 +265,14 @@ class GeneratorConfig
         $commandData->addDynamicVariable('$MODEL_NAME_PLURAL_SLASH$', $this->mSlashPlural);
         $commandData->addDynamicVariable('$MODEL_NAME_HUMAN$', $this->mHuman);
         $commandData->addDynamicVariable('$MODEL_NAME_PLURAL_HUMAN$', $this->mHumanPlural);
+        $commandData->addDynamicVariable('$FILES$', '');
+
+        $connectionText = '';
+        if ($connection = $this->getOption('connection')) {
+            $this->connection = $connection;
+            $connectionText = infy_tab(4).'public $connection = "'.$connection.'";';
+        }
+        $commandData->addDynamicVariable('$CONNECTION$', $connectionText);
 
         if (!empty($this->prefixes['route'])) {
             $commandData->addDynamicVariable('$ROUTE_NAMED_PREFIX$', $this->prefixes['route'].'.');
@@ -287,6 +310,8 @@ class GeneratorConfig
             '$API_VERSION$',
             config('infyom.laravel_generator.api_version', 'v1')
         );
+
+        $commandData->addDynamicVariable('$SEARCHABLE$', '');
 
         return $commandData;
     }
@@ -341,7 +366,20 @@ class GeneratorConfig
             }
         }
 
+        if (empty($this->options['save'])) {
+            $this->options['save'] = config('infyom.laravel_generator.options.save_schema_file', true);
+        }
+
+        if (empty($this->options['localized'])) {
+            $this->options['localized'] = config('infyom.laravel_generator.options.localized', false);
+        }
+
+        if ($this->options['localized']) {
+            $commandData->getTemplatesManager()->setUseLocale(true);
+        }
+
         $this->options['softDelete'] = config('infyom.laravel_generator.options.softDelete', false);
+        $this->options['repositoryPattern'] = config('infyom.laravel_generator.options.repository_pattern', true);
         if (!empty($this->options['skip'])) {
             $this->options['skip'] = array_map('trim', explode(',', $this->options['skip']));
         }
@@ -363,7 +401,7 @@ class GeneratorConfig
         $this->prefixes['public'] = explode('/', config('infyom.laravel_generator.prefixes.public', ''));
 
         if ($this->getOption('prefix')) {
-            $multiplePrefixes = explode(',', $this->getOption('prefix'));
+            $multiplePrefixes = explode('/', $this->getOption('prefix'));
 
             $this->prefixes['route'] = array_merge($this->prefixes['route'], $multiplePrefixes);
             $this->prefixes['path'] = array_merge($this->prefixes['path'], $multiplePrefixes);

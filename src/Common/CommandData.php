@@ -31,6 +31,9 @@ class CommandData
     /** @var Command */
     public $commandObj;
 
+    /** @var TemplatesManager */
+    private $templateManager;
+
     /** @var array */
     public $dynamicVars = [];
     public $fieldNamesMapping = [];
@@ -43,15 +46,31 @@ class CommandData
         return self::$instance;
     }
 
+    public function getTemplatesManager()
+    {
+        return $this->templateManager;
+    }
+
+    public function isLocalizedTemplates()
+    {
+        return $this->templateManager->isUsingLocale();
+    }
+
     /**
-     * @param Command $commandObj
-     * @param string  $commandType
-     *
-     * @return CommandData
+     * @param Command          $commandObj
+     * @param string           $commandType
+     * @param TemplatesManager $templatesManager
      */
-    public function __construct(Command $commandObj, $commandType)
+    public function __construct(Command $commandObj, $commandType, TemplatesManager $templatesManager = null)
     {
         $this->commandObj = $commandObj;
+
+        if (is_null($templatesManager)) {
+            $this->templateManager = app(TemplatesManager::class);
+        } else {
+            $this->templateManager = $templatesManager;
+        }
+
         $this->commandType = $commandType;
 
         $this->fieldNamesMapping = [
@@ -159,7 +178,9 @@ class CommandData
             }
         }
 
-        $this->addTimestamps();
+        if (config('infyom.laravel_generator.timestamps.enabled', true)) {
+            $this->addTimestamps();
+        }
     }
 
     private function addPrimaryKey()
@@ -202,7 +223,10 @@ class CommandData
                 } elseif (file_exists(base_path($fieldsFileValue))) {
                     $filePath = base_path($fieldsFileValue);
                 } else {
-                    $schemaFileDirector = config('infyom.laravel_generator.path.schema_files');
+                    $schemaFileDirector = config(
+                        'infyom.laravel_generator.path.schema_files',
+                        resource_path('model_schemas/')
+                    );
                     $filePath = $schemaFileDirector.$fieldsFileValue;
                 }
 
@@ -272,7 +296,7 @@ class CommandData
             $ignoredFields = [];
         }
 
-        $tableFieldsGenerator = new TableFieldsGenerator($tableName, $ignoredFields);
+        $tableFieldsGenerator = new TableFieldsGenerator($tableName, $ignoredFields, $this->config->connection);
         $tableFieldsGenerator->prepareFieldsFromTable();
         $tableFieldsGenerator->prepareRelations();
 

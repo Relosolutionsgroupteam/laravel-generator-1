@@ -3,6 +3,7 @@
 namespace InfyOm\Generator\Commands\Publish;
 
 use InfyOm\Generator\Utils\FileUtil;
+use Symfony\Component\Console\Input\InputOption;
 
 class GeneratorPublishCommand extends PublishBaseCommand
 {
@@ -29,7 +30,13 @@ class GeneratorPublishCommand extends PublishBaseCommand
     {
         $this->publishTestCases();
         $this->publishBaseController();
-        $this->publishBaseRepository();
+        $repositoryPattern = config('infyom.laravel_generator.options.repository_pattern', true);
+        if ($repositoryPattern) {
+            $this->publishBaseRepository();
+        }
+        if ($this->option('localized')) {
+            $this->publishLocaleFiles();
+        }
     }
 
     /**
@@ -73,12 +80,6 @@ class GeneratorPublishCommand extends PublishBaseCommand
 
         FileUtil::createFile($testsPath, $fileName, $templateData);
         $this->info('ApiTestTrait created');
-
-        $testTraitPath = config('infyom.laravel_generator.path.test_trait', base_path('tests/Traits/'));
-        if (!file_exists($testTraitPath)) {
-            FileUtil::createDirectoryIfNotExist($testTraitPath);
-            $this->info('Test Traits directory created');
-        }
 
         $testAPIsPath = config('infyom.laravel_generator.path.api_test', base_path('tests/APIs/'));
         if (!file_exists($testAPIsPath)) {
@@ -133,6 +134,15 @@ class GeneratorPublishCommand extends PublishBaseCommand
         $this->info('BaseRepository created');
     }
 
+    private function publishLocaleFiles()
+    {
+        $localesDir = __DIR__.'/../../../locale/';
+
+        $this->publishDirectory($localesDir, resource_path('lang'), 'lang', true);
+
+        $this->comment('Locale files published');
+    }
+
     /**
      * Get the console command options.
      *
@@ -140,7 +150,9 @@ class GeneratorPublishCommand extends PublishBaseCommand
      */
     public function getOptions()
     {
-        return [];
+        return [
+            ['localized', null, InputOption::VALUE_NONE, 'Localize files.'],
+        ];
     }
 
     /**
